@@ -1,0 +1,256 @@
+-- Universal Panel | Roblox Studio | LocalScript
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "UniversalScripts"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0,320,0,270)
+main.Position = UDim2.new(.5,-160,.5,-135)
+main.BackgroundColor3 = Color3.fromRGB(30,30,30)
+main.Active = true
+main.Parent = gui
+
+local function makeButton(parent,text,size,pos)
+    local b = Instance.new("TextButton")
+    b.Size = size
+    b.Position = pos
+    b.Text = text
+    b.BackgroundColor3 = Color3.fromRGB(55,55,55)
+    b.TextColor3 = Color3.new(1,1,1)
+    b.Parent = parent
+    return b
+end
+
+local title = makeButton(main,"Universal Scripts",UDim2.new(1,0,0,35),UDim2.new())
+title.Active = false
+
+local noclipBtn = makeButton(main,"No Clip: OFF",UDim2.new(0,140,0,35),UDim2.new(0,10,0,50))
+local flyBtn = makeButton(main,"Fly: OFF",UDim2.new(0,140,0,35),UDim2.new(0,10,0,95))
+local jumpBtn = makeButton(main,"Jump High: OFF",UDim2.new(0,140,0,35),UDim2.new(0,10,0,140))
+local hideBtn = makeButton(main,"Hide",UDim2.new(0,70,0,30),UDim2.new(1,-80,0,50))
+local closeBtn = makeButton(main,"Close",UDim2.new(0,70,0,30),UDim2.new(1,-80,0,90))
+
+local speedBox = Instance.new("TextBox")
+speedBox.Size = UDim2.new(0,70,0,30)
+speedBox.Position = UDim2.new(1,-80,0,140)
+speedBox.Text = "50"
+speedBox.PlaceholderText = "Speed"
+speedBox.BackgroundColor3 = Color3.fromRGB(65,65,65)
+speedBox.TextColor3 = Color3.new(1,1,1)
+speedBox.Parent = main
+
+local mini = makeButton(gui,"OPEN",UDim2.new(0,55,0,55),UDim2.new(1,-65,.5,-25))
+mini.Visible = false
+
+-- Drag GUI
+local dragging, dragStart, startPos
+
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale,startPos.X.Offset + delta.X,
+            startPos.Y.Scale,startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+hideBtn.Activated:Connect(function()
+    main.Visible = false
+    mini.Visible = true
+end)
+
+mini.Activated:Connect(function()
+    main.Visible = true
+    mini.Visible = false
+end)
+
+closeBtn.Activated:Connect(function()
+    gui:Destroy()
+end)
+
+-- Jump High
+local jumpEnabled = false
+
+local function applyJump()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.UseJumpPower = true
+        hum.JumpPower = jumpEnabled and 100 or 50
+    end
+end
+
+jumpBtn.Activated:Connect(function()
+    jumpEnabled = not jumpEnabled
+    jumpBtn.Text = jumpEnabled and "Jump High: ON" or "Jump High: OFF"
+    applyJump()
+end)
+
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    applyJump()
+end)
+
+-- No Clip
+local noclipEnabled = false
+local noclipConnection
+local originalCollision = {}
+
+local function restoreCollision()
+    for part, value in pairs(originalCollision) do
+        if part and part.Parent then
+            part.CanCollide = value
+        end
+    end
+    table.clear(originalCollision)
+end
+
+noclipBtn.Activated:Connect(function()
+    noclipEnabled = not noclipEnabled
+    noclipBtn.Text = noclipEnabled and "No Clip: ON" or "No Clip: OFF"
+
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+
+    if noclipEnabled then
+        noclipConnection = RunService.Stepped:Connect(function()
+            local char = player.Character
+            if char then
+                for _,part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        if originalCollision[part] == nil then
+                            originalCollision[part] = part.CanCollide
+                        end
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        restoreCollision()
+    end
+end)
+
+-- Fly
+local flying = false
+local flyConnection
+local stopFlyBtn
+
+local function stopFly()
+    flying = false
+    flyBtn.Text = "Fly: OFF"
+
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+
+    if stopFlyBtn then
+        stopFlyBtn:Destroy()
+        stopFlyBtn = nil
+    end
+
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+
+    if root then
+        root.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    if hum then
+        hum.PlatformStand = false
+        hum.AutoRotate = true
+    end
+end
+
+flyBtn.Activated:Connect(function()
+    if flying then
+        stopFly()
+        return
+    end
+
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+
+    if not hum or not root then return end
+
+    flying = true
+    flyBtn.Text = "Fly: ON"
+
+    stopFlyBtn = makeButton(
+        gui,
+        "STOP FLY",
+        UDim2.new(0,110,0,45),
+        UDim2.new(0,15,.5,-22)
+    )
+
+    stopFlyBtn.BackgroundColor3 = Color3.fromRGB(170,45,45)
+
+    stopFlyBtn.Activated:Connect(stopFly)
+
+    hum.PlatformStand = true
+    hum.AutoRotate = false
+
+    flyConnection = RunService.RenderStepped:Connect(function()
+        if not flying or not root.Parent then return end
+
+        local speed = tonumber(speedBox.Text) or 50
+        speed = math.clamp(speed,1,300)
+
+        -- حركة القير على الجوال والكيبورد
+        local direction = hum.MoveDirection
+
+        -- صعود ونزول
+        local vertical = 0
+
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then
+            vertical = 1
+        elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+            vertical = -1
+        end
+
+        if hum.Jump then
+            vertical = 1
+        end
+
+        local velocity = direction * speed
+            + Vector3.new(0,vertical * speed,0)
+
+        root.AssemblyLinearVelocity = velocity
+    end)
+end)
+
+player.CharacterAdded:Connect(function()
+    if flying then
+        stopFly()
+    end
+    restoreCollision()
+end)
